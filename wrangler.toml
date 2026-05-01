@@ -1,0 +1,5 @@
+name = "cf-ai-json-api"
+compatibility_date = "2026-05-01"
+
+[ai]
+binding = "AI"
