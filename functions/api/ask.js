@@ -5,11 +5,15 @@ function stripMarkdownCodeFences(text) {
 }
 
 function buildInvalidLessonResponse(message, parsed, rawText) {
-  const topLevelKeys = parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? Object.keys(parsed)
-    : [];
-  const lessonObject = parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? (parsed.lesson && typeof parsed.lesson === "object" && !Array.isArray(parsed.lesson) ? parsed.lesson : null)
+  const topLevelKeys = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? Object.keys(parsed) : [];
+  const lessonValue = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed.lesson : undefined;
+  const lessonType = Array.isArray(lessonValue)
+    ? "array"
+    : lessonValue === null
+      ? "null"
+      : typeof lessonValue;
+  const lessonObject = lessonValue && typeof lessonValue === "object" && !Array.isArray(lessonValue)
+    ? lessonValue
     : null;
   const lessonKeys = lessonObject ? Object.keys(lessonObject) : [];
 
@@ -19,6 +23,7 @@ function buildInvalidLessonResponse(message, parsed, rawText) {
       error: "INVALID_LESSON_JSON",
       message,
       debug: {
+        lessonType,
         topLevelKeys,
         lessonKeys,
         rawTextPreview: typeof rawText === "string" ? rawText.slice(0, 500) : ""
@@ -89,22 +94,27 @@ export async function onRequestPost(context) {
     }
   }
 
-  const normalizedLesson = parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? (parsed.lesson && typeof parsed.lesson === "object" && !Array.isArray(parsed.lesson) ? parsed.lesson : parsed)
-    : null;
+  let normalizedLesson = null;
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    if (parsed.lesson && typeof parsed.lesson === "object" && !Array.isArray(parsed.lesson)) {
+      normalizedLesson = parsed.lesson;
+    } else if (Array.isArray(parsed.lessons)) {
+      normalizedLesson = { lessons: parsed.lessons };
+    }
+  }
 
   const lessons = normalizedLesson?.lessons;
 
-  if (!normalizedLesson || !Object.prototype.hasOwnProperty.call(normalizedLesson, "lessons")) {
-    return buildInvalidLessonResponse("Missing required field: lesson.lessons.", parsed, rawText);
+  if (!normalizedLesson || typeof normalizedLesson !== "object" || !Object.prototype.hasOwnProperty.call(normalizedLesson, "lessons")) {
+    return buildInvalidLessonResponse("AI response did not contain lesson.lessons array", parsed, rawText);
   }
 
   if (!Array.isArray(lessons)) {
-    return buildInvalidLessonResponse("Invalid lesson.lessons: expected an array.", parsed, rawText);
+    return buildInvalidLessonResponse("AI response did not contain lesson.lessons array", parsed, rawText);
   }
 
   if (lessons.length === 0) {
-    return buildInvalidLessonResponse("Invalid lesson.lessons: array must not be empty.", parsed, rawText);
+    return buildInvalidLessonResponse("AI response did not contain lesson.lessons array", parsed, rawText);
   }
 
   console.log("Lesson payload shape", {
